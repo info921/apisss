@@ -26,6 +26,7 @@ interface MapViewProps {
   setOffset: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
   lang: Language;
   theme: Theme;
+  backgroundImage?: string | null;
 }
 
 interface MapNode extends d3.SimulationNodeDatum {
@@ -37,40 +38,38 @@ interface MapNode extends d3.SimulationNodeDatum {
 const MapView: React.FC<MapViewProps> = ({ 
   entities, customLinks, selectedId, onSelect, onMoveEntity, 
   onAddCustomLink, onRemoveCustomLink, onAddEntity, onAddPerson, isConnecting, setIsConnecting, 
-  connectionSource, setConnectionSource, zoom, setZoom, offset, setOffset, lang, theme 
+  connectionSource, setConnectionSource, zoom, setZoom, offset, setOffset, lang, theme, backgroundImage 
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDraggingMap, setIsDraggingMap] = useState(false);
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [containerSize, setContainerSize] = useState({ width: 5504, height: 3072 });
   const [simulatedPositions, setSimulatedPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [liveDragPos, setLiveDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    const updateSize = () => {
-      if (containerRef.current) {
-        setContainerSize({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight
-        });
-      }
-    };
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    // Fixed size map, no resize listener needed
   }, []);
   
   const [nodeOverrides, setNodeOverrides] = useState<Record<string, { x: number; y: number }>>(() => {
-    const saved = localStorage.getItem('igc-map-node-overrides');
-    return saved ? JSON.parse(saved) : {};
+    try {
+      const saved = localStorage.getItem('igc-map-node-overrides');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      console.error("Error loading map node overrides:", e);
+      return {};
+    }
   });
 
   useEffect(() => {
-    localStorage.setItem('igc-map-node-overrides', JSON.stringify(nodeOverrides));
+    try {
+      localStorage.setItem('igc-map-node-overrides', JSON.stringify(nodeOverrides));
+    } catch (e) {
+      console.error("Error saving map node overrides:", e);
+    }
   }, [nodeOverrides]);
 
   const basePositions: Record<string, { x: number; y: number }> = {
@@ -263,10 +262,24 @@ const MapView: React.FC<MapViewProps> = ({
       }}
     >
       <div 
-        className={`w-full h-full relative origin-top-left ${(isDraggingMap || draggedNodeId) ? '' : 'transition-transform duration-200 ease-out'}`}
-        style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
+        className={`relative origin-top-left ${(isDraggingMap || draggedNodeId) ? '' : 'transition-transform duration-200 ease-out'}`}
+        style={{ 
+          transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+          width: 5504,
+          height: 3072
+        }}
       >
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {backgroundImage && (
+          <div className="absolute inset-0 z-0 pointer-events-none">
+            <img 
+              src={backgroundImage} 
+              alt="Map Background" 
+              className="w-full h-full object-cover" 
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        )}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <marker
               id="arrowhead"

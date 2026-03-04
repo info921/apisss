@@ -20,30 +20,45 @@ export type Language = 'pl' | 'en';
 
 const App: React.FC = () => {
   const [data, setData] = useState(() => {
-    const saved = localStorage.getItem('igc-data');
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem('igc-data');
+      if (saved) {
         return JSON.parse(saved);
-      } catch (e) {
-        return initialData;
       }
+    } catch (e) {
+      console.error("Error loading data from localStorage:", e);
     }
     return initialData;
   });
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = localStorage.getItem('igc-view-mode');
-    return (saved as ViewMode) || 'tree';
+    try {
+      const saved = localStorage.getItem('igc-view-mode');
+      if (saved) return saved as ViewMode;
+    } catch (e) {
+      console.error("Error loading viewMode from localStorage:", e);
+    }
+    return 'tree';
   });
 
   const [lang, setLang] = useState<Language>(() => {
-    const saved = localStorage.getItem('igc-lang');
-    return (saved as Language) || 'pl';
+    try {
+      const saved = localStorage.getItem('igc-lang');
+      if (saved) return saved as Language;
+    } catch (e) {
+      console.error("Error loading lang from localStorage:", e);
+    }
+    return 'pl';
   });
 
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('igc-theme');
-    return (saved as Theme) || 'dark';
+    try {
+      const saved = localStorage.getItem('igc-theme');
+      if (saved) return saved as Theme;
+    } catch (e) {
+      console.error("Error loading theme from localStorage:", e);
+    }
+    return 'dark';
   });
 
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>('global');
@@ -58,8 +73,109 @@ const App: React.FC = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionSource, setConnectionSource] = useState<string | null>(null);
   const [peopleSearchTerm, setPeopleSearchTerm] = useState('');
+  const [importTimestamp, setImportTimestamp] = useState(Date.now());
+  const [backgroundImage, setBackgroundImage] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('igc-background-image');
+    } catch (e) {
+      console.error("Error loading backgroundImage from localStorage:", e);
+      return null;
+    }
+  });
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load state from server on mount
+  React.useEffect(() => {
+    const loadState = async () => {
+      try {
+        const response = await fetch('/api/state');
+        if (response.ok) {
+          const json = await response.json();
+          if (json) {
+            // Restore state from server
+            if (json.data) setData(json.data);
+            if (json.viewMode) setViewMode(json.viewMode);
+            if (json.lang) setLang(json.lang);
+            if (json.theme) setTheme(json.theme);
+            if (json.viewStates) setViewStates(json.viewStates);
+            if (json.backgroundImage) setBackgroundImage(json.backgroundImage);
+
+            // Restore node overrides
+            if (json.nodeOverrides) {
+              try {
+                if (json.nodeOverrides.affiliation) {
+                  localStorage.setItem('igc-affiliation-node-overrides', JSON.stringify(json.nodeOverrides.affiliation));
+                }
+                if (json.nodeOverrides.network) {
+                  localStorage.setItem('igc-network-node-overrides', JSON.stringify(json.nodeOverrides.network));
+                }
+                if (json.nodeOverrides.map) {
+                  localStorage.setItem('igc-map-node-overrides', JSON.stringify(json.nodeOverrides.map));
+                }
+              } catch (e) {
+                console.error("Error restoring node overrides to localStorage:", e);
+              }
+            }
+            
+            // Force reload to ensure all components pick up new localStorage data
+            setImportTimestamp(Date.now());
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load state from server:", error);
+      }
+    };
+    loadState();
+  }, []);
+
+  const handleSaveToCloud = async () => {
+    setIsSaving(true);
+    try {
+      // Get node overrides from localStorage
+      const affiliationOverrides = localStorage.getItem('igc-affiliation-node-overrides');
+      const networkOverrides = localStorage.getItem('igc-network-node-overrides');
+      const mapOverrides = localStorage.getItem('igc-map-node-overrides');
+
+      const fullConfig = {
+        data,
+        viewMode,
+        lang,
+        theme,
+        viewStates,
+        backgroundImage,
+        nodeOverrides: {
+          affiliation: affiliationOverrides ? JSON.parse(affiliationOverrides) : {},
+          network: networkOverrides ? JSON.parse(networkOverrides) : {},
+          map: mapOverrides ? JSON.parse(mapOverrides) : {}
+        },
+        version: '1.0.0',
+        updatedAt: new Date().toISOString()
+      };
+
+      const response = await fetch('/api/state', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(fullConfig),
+      });
+
+      if (response.ok) {
+        alert(lang === 'pl' ? 'Zapisano w chmurze!' : 'Saved to cloud!');
+      } else {
+        throw new Error('Failed to save');
+      }
+    } catch (error) {
+      console.error("Error saving to cloud:", error);
+      alert(lang === 'pl' ? 'Błąd zapisu!' : 'Save failed!');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bgInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,6 +184,20 @@ const App: React.FC = () => {
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleBackgroundChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setBackgroundImage(ev.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+    if (bgInputRef.current) {
+      bgInputRef.current.value = '';
     }
   };
 
@@ -80,24 +210,47 @@ const App: React.FC = () => {
       people: { zoom: 1, offset: { x: 0, y: 0 } },
       affiliation: { zoom: 1, offset: { x: 0, y: 0 } }
     };
-    const saved = localStorage.getItem('igc-view-states');
-    if (!saved) return defaults;
     try {
-      const parsed = JSON.parse(saved);
-      return { ...defaults, ...parsed };
-    } catch {
-      return defaults;
+      const saved = localStorage.getItem('igc-view-states');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { ...defaults, ...parsed };
+      }
+    } catch (e) {
+      console.error("Error loading viewStates from localStorage:", e);
     }
+    return defaults;
   });
 
   // Save all states to localStorage
   React.useEffect(() => {
-    localStorage.setItem('igc-data', JSON.stringify(data));
-    localStorage.setItem('igc-view-mode', viewMode);
-    localStorage.setItem('igc-lang', lang);
-    localStorage.setItem('igc-theme', theme);
-    localStorage.setItem('igc-view-states', JSON.stringify(viewStates));
-  }, [data, viewMode, lang, theme, viewStates]);
+    try {
+      localStorage.setItem('igc-data', JSON.stringify(data));
+      localStorage.setItem('igc-view-mode', viewMode);
+      localStorage.setItem('igc-lang', lang);
+      localStorage.setItem('igc-theme', theme);
+      localStorage.setItem('igc-view-states', JSON.stringify(viewStates));
+      if (backgroundImage) {
+        // Only save to localStorage if it's not too large (e.g. < 4MB)
+        // to avoid QuotaExceededError which is common with large base64 images
+        if (backgroundImage.length < 4000000) {
+          localStorage.setItem('igc-background-image', backgroundImage);
+        } else {
+          console.warn("Background image too large for localStorage, will only persist on server.");
+        }
+      } else {
+        localStorage.removeItem('igc-background-image');
+      }
+    } catch (e) {
+      console.error("Error saving to localStorage:", e);
+      // If quota exceeded, try removing the large background image first
+      if (e instanceof Error && e.name === 'QuotaExceededError') {
+        try {
+          localStorage.removeItem('igc-background-image');
+        } catch (inner) {}
+      }
+    }
+  }, [data, viewMode, lang, theme, viewStates, backgroundImage]);
 
   const zoom = viewStates[viewMode].zoom;
   const offset = viewStates[viewMode].offset;
@@ -156,9 +309,12 @@ const App: React.FC = () => {
   const handleOpenAddManagerModal = (entityId?: string) => {
     if (entityId) {
       setSelectedEntityId(entityId);
-    } else if (!selectedEntityId) {
-      // Default to global if nothing is selected
-      setSelectedEntityId('global');
+    } else {
+      // If no entity is selected or the selection is not a valid entity (e.g. a person), default to global
+      const isValidEntity = selectedEntityId && data.entities[selectedEntityId];
+      if (!isValidEntity) {
+        setSelectedEntityId('global');
+      }
     }
     setIsAddManagerModalOpen(true);
   };
@@ -457,12 +613,22 @@ const App: React.FC = () => {
   };
 
   const handleExportJSON = () => {
+    // Get node overrides from localStorage
+    const affiliationOverrides = localStorage.getItem('igc-affiliation-node-overrides');
+    const networkOverrides = localStorage.getItem('igc-network-node-overrides');
+    const mapOverrides = localStorage.getItem('igc-map-node-overrides');
+
     const fullConfig = {
       data,
       viewMode,
       lang,
       theme,
       viewStates,
+      nodeOverrides: {
+        affiliation: affiliationOverrides ? JSON.parse(affiliationOverrides) : {},
+        network: networkOverrides ? JSON.parse(networkOverrides) : {},
+        map: mapOverrides ? JSON.parse(mapOverrides) : {}
+      },
       version: '1.0.0',
       exportedAt: new Date().toISOString()
     };
@@ -495,9 +661,26 @@ const App: React.FC = () => {
           if (json.theme) setTheme(json.theme);
           if (json.viewStates) setViewStates(json.viewStates);
 
+          // Restore node overrides
+          if (json.nodeOverrides) {
+            if (json.nodeOverrides.affiliation) {
+              localStorage.setItem('igc-affiliation-node-overrides', JSON.stringify(json.nodeOverrides.affiliation));
+            }
+            if (json.nodeOverrides.network) {
+              localStorage.setItem('igc-network-node-overrides', JSON.stringify(json.nodeOverrides.network));
+            }
+            if (json.nodeOverrides.map) {
+              localStorage.setItem('igc-map-node-overrides', JSON.stringify(json.nodeOverrides.map));
+            }
+          }
+
           // Reset view to world or first entity
           const firstId = Object.keys(importedData.entities)[0];
           if (firstId) setSelectedEntityId(firstId);
+          
+          // Force reload to ensure all components pick up new localStorage data
+          setImportTimestamp(Date.now());
+
         } else {
           alert(lang === 'pl' ? 'Nieprawidłowy format pliku' : 'Invalid file format');
         }
@@ -648,17 +831,33 @@ const App: React.FC = () => {
               {/* Import/Export Buttons */}
               <div className={`flex p-1 backdrop-blur border rounded-xl transition-colors ${theme === 'dark' ? 'bg-slate-900/80 border-slate-700' : 'bg-white/80 border-slate-200 shadow-sm'}`}>
                 <button 
+                  onClick={handleSaveToCloud}
+                  disabled={isSaving}
+                  title={lang === 'pl' ? "Zapisz w chmurze (dla innych)" : "Save to Cloud (for others)"}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
+                    theme === 'dark' 
+                    ? 'bg-cyan-500 text-slate-900 hover:bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.4)]' 
+                    : 'bg-cyan-500 text-white hover:bg-cyan-600 shadow-md'
+                  }`}
+                >
+                  {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  <span className="text-[9px] font-bold uppercase tracking-wider">
+                    {lang === 'pl' ? 'Zapisz' : 'Save'}
+                  </span>
+                </button>
+                <div className={`w-px h-4 my-auto mx-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                <button 
                   onClick={handleExportJSON}
-                  title={lang === 'pl' ? "Zapisz i Eksportuj" : "Save & Export"}
+                  title={lang === 'pl' ? "Eksportuj do pliku" : "Export to File"}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
                     theme === 'dark' 
                     ? 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20' 
                     : 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100'
                   }`}
                 >
-                  <Save size={16} />
+                  <Download size={16} />
                   <span className="text-[9px] font-bold uppercase tracking-wider">
-                    {lang === 'pl' ? 'Zapisz' : 'Save'}
+                    {lang === 'pl' ? 'Eksport' : 'Export'}
                   </span>
                 </button>
                 <div className={`w-px h-4 my-auto mx-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
@@ -672,6 +871,15 @@ const App: React.FC = () => {
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
                 <div className={`w-px h-4 my-auto mx-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
                 <button 
+                  onClick={() => bgInputRef.current?.click()}
+                  title={lang === 'pl' ? "Importuj Tło Mapy" : "Import Map Background"}
+                  className={`p-2 rounded-lg transition-all ${theme === 'dark' ? 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800' : 'text-slate-500 hover:text-cyan-600 hover:bg-slate-100'}`}
+                >
+                  <ImageIcon size={16} />
+                </button>
+                <input type="file" ref={bgInputRef} onChange={handleBackgroundChange} accept="image/png, image/jpeg" className="hidden" />
+                <div className={`w-px h-4 my-auto mx-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                <button 
                   onClick={handleExportJPG}
                   disabled={isExporting}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 ${
@@ -680,7 +888,7 @@ const App: React.FC = () => {
                     : 'text-slate-500 hover:text-cyan-600 hover:bg-slate-100'
                   }`}
                 >
-                  {isExporting ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+                  {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                   {lang === 'pl' ? 'JPG' : 'JPG'}
                 </button>
               </div>
@@ -710,9 +918,11 @@ const App: React.FC = () => {
               setOffset={setOffset}
               lang={lang}
               theme={theme}
+              backgroundImage={backgroundImage}
             />
           ) : viewMode === 'hierarchy' ? (
             <MapView 
+              key={importTimestamp}
               entities={data.entities}
               customLinks={data.customLinks || []}
               selectedId={selectedEntityId} 
@@ -732,18 +942,19 @@ const App: React.FC = () => {
               setOffset={setOffset}
               lang={lang}
               theme={theme}
+              backgroundImage={backgroundImage}
             />
           ) : viewMode === 'network' ? (
             <NetworkView 
+              key={importTimestamp}
               entities={data.entities}
               customLinks={data.customLinks || []}
               selectedId={selectedEntityId} 
               onSelect={handleSelectEntity}
-              onMoveEntity={handleMoveEntity}
+              onEditEntity={handleOpenEditModal}
+              onAddEntity={handleOpenAddModal}
               onAddCustomLink={handleAddCustomLink}
               onRemoveCustomLink={handleRemoveCustomLink}
-              onAddEntity={handleOpenAddModal}
-              onAddPerson={handleOpenAddManagerModal}
               isConnecting={isConnecting}
               setIsConnecting={setIsConnecting}
               connectionSource={connectionSource}
@@ -754,16 +965,16 @@ const App: React.FC = () => {
               setOffset={setOffset}
               lang={lang}
               theme={theme}
+              backgroundImage={backgroundImage}
             />
           ) : viewMode === 'affiliation' ? (
             <AffiliationView 
+              key={importTimestamp}
               entities={data.entities}
               customLinks={data.customLinks || []}
               selectedId={selectedEntityId} 
               onSelect={handleSelectEntity}
               onEditPerson={handleOpenEditPersonModal}
-              onEditEntity={handleOpenEditModal}
-              onAddEntity={handleOpenAddModal}
               onAddPerson={handleOpenAddManagerModal}
               onAddCustomLink={handleAddCustomLink}
               onRemoveCustomLink={handleRemoveCustomLink}
@@ -781,6 +992,7 @@ const App: React.FC = () => {
               setOffset={setOffset}
               lang={lang}
               theme={theme}
+              backgroundImage={backgroundImage}
             />
           ) : (
             <PeopleView 

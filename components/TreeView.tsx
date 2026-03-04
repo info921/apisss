@@ -15,9 +15,10 @@ interface TreeViewProps {
   setOffset: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
   lang: Language;
   theme: Theme;
+  backgroundImage?: string | null;
 }
 
-const TreeView: React.FC<TreeViewProps> = ({ entities, selectedId, onSelect, onMoveEntity, zoom, setZoom, offset, setOffset, lang, theme }) => {
+const TreeView: React.FC<TreeViewProps> = ({ entities, selectedId, onSelect, onMoveEntity, zoom, setZoom, offset, setOffset, lang, theme, backgroundImage }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -186,7 +187,17 @@ const TreeView: React.FC<TreeViewProps> = ({ entities, selectedId, onSelect, onM
         className="w-full h-full relative origin-top-left transition-transform duration-200 ease-out"
         style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
       >
-        <svg className="absolute inset-0 pointer-events-none" style={{ width: 10000, height: 10000 }}>
+        {backgroundImage && (
+          <div className="absolute inset-0 z-0 pointer-events-none" style={{ width: 5504, height: 3072 }}>
+            <img 
+              src={backgroundImage} 
+              alt="Tree Background" 
+              className="w-full h-full object-cover" 
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        )}
+        <svg className="absolute inset-0 pointer-events-none" style={{ width: 5504, height: 3072 }}>
           <defs>
             <marker id="dot" markerWidth="4" markerHeight="4" refX="2" refY="2">
               <circle cx="2" cy="2" r="1.5" fill="rgba(34, 211, 238, 0.4)" />

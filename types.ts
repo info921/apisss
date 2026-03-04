@@ -12,6 +12,8 @@ export interface Person {
   aboutMeEn?: string;
   website?: string;
   email?: string;
+  tierLevel?: 'Tier 1' | 'Tier 2' | 'Tier 3' | 'Tier 4' | 'Tier 5';
+  status?: 'active' | 'inactive';
 }
 
 export enum EntityType {

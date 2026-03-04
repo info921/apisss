@@ -2,14 +2,50 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import { VertexAI } from "@google-cloud/vertexai";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 
 dotenv.config();
+
+const DATA_DIR = path.join(process.cwd(), "data");
+const STATE_FILE = path.join(DATA_DIR, "appState.json");
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR);
+}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  // Increase limit for large payloads (images)
+  app.use(express.json({ limit: '50mb' }));
+
+  // State persistence endpoints
+  app.get("/api/state", (req, res) => {
+    try {
+      if (fs.existsSync(STATE_FILE)) {
+        const data = fs.readFileSync(STATE_FILE, "utf-8");
+        res.json(JSON.parse(data));
+      } else {
+        res.json(null);
+      }
+    } catch (error) {
+      console.error("Error reading state:", error);
+      res.status(500).json({ error: "Failed to read state" });
+    }
+  });
+
+  app.post("/api/state", (req, res) => {
+    try {
+      const state = req.body;
+      fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error saving state:", error);
+      res.status(500).json({ error: "Failed to save state" });
+    }
+  });
 
   // Vertex AI API endpoint
   app.post("/api/vertex/generate", async (req, res) => {

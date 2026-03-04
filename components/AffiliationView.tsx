@@ -1,7 +1,7 @@
 
 import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { ConsortiumEntity, Theme, Person, CustomLink } from '../types';
-import { User, Zap, Building2, Link as LinkIcon, X as CloseIcon, Globe, ExternalLink, Pencil, Mail, Plus, UserPlus } from 'lucide-react';
+import { User, Zap, Link as LinkIcon, X as CloseIcon, Globe, ExternalLink, Pencil, Mail, UserPlus } from 'lucide-react';
 import { Language } from '../App';
 import * as d3 from 'd3';
 
@@ -11,8 +11,6 @@ interface AffiliationViewProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onEditPerson?: (person: Person) => void;
-  onEditEntity?: (id?: string) => void;
-  onAddEntity?: (parentId: string) => void;
   onAddPerson?: () => void;
   onViewPeople?: (name: string) => void;
   onAddCustomLink: (source: string, target: string) => void;
@@ -27,15 +25,15 @@ interface AffiliationViewProps {
   setOffset: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
   lang: Language;
   theme: Theme;
+  backgroundImage?: string | null;
 }
 
 interface GraphNode extends d3.SimulationNodeDatum {
   id: string;
-  type: 'entity' | 'person';
+  type: 'person';
   name: string;
   color: string;
   photo?: string;
-  logo?: string;
   role?: string;
   personData?: Person;
 }
@@ -43,61 +41,43 @@ interface GraphNode extends d3.SimulationNodeDatum {
 interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
   source: string;
   target: string;
-  type: 'hierarchy' | 'affiliation';
+  type: 'hierarchy';
   label?: string;
 }
 
 const NodeAvatar: React.FC<{ node: any; theme: Theme; lang: Language }> = ({ node, theme, lang }) => {
   const [error, setError] = React.useState(false);
 
-  if (node.type === 'person') {
-    return (
-      <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-cyan-500/30 shrink-0 shadow-inner">
-        {node.photo && !error ? (
-          <img 
-            src={node.photo} 
-            alt={node.name} 
-            className="w-full h-full object-cover" 
-            referrerPolicy="no-referrer"
-            onError={() => setError(true)}
-          />
-        ) : (
-          <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-            <User size={32} className="text-slate-600" />
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div className="w-20 h-20 rounded-2xl flex items-center justify-center border-2 shrink-0 shadow-inner overflow-hidden" style={{ borderColor: node.color, backgroundColor: `${node.color}10` }}>
-      {node.logo && !error ? (
+    <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-cyan-500/30 shrink-0 shadow-inner">
+      {node.photo && !error ? (
         <img 
-          src={node.logo} 
+          src={node.photo} 
           alt={node.name} 
-          className="w-full h-full object-contain p-2" 
+          className="w-full h-full object-cover" 
           referrerPolicy="no-referrer"
           onError={() => setError(true)}
         />
       ) : (
-        <Building2 size={40} style={{ color: node.color }} />
+        <div className="w-full h-full bg-slate-800 flex items-center justify-center">
+          <User size={32} className="text-slate-600" />
+        </div>
       )}
     </div>
   );
 };
 
 const AffiliationView: React.FC<AffiliationViewProps> = ({ 
-  entities, customLinks, selectedId, onSelect, onEditPerson, onEditEntity, onAddEntity, onAddPerson, onViewPeople, onAddCustomLink, onRemoveCustomLink,
+  entities, customLinks, selectedId, onSelect, onEditPerson, onAddPerson, onViewPeople, onAddCustomLink, onRemoveCustomLink,
   isConnecting, setIsConnecting, connectionSource, setConnectionSource,
-  zoom, setZoom, offset, setOffset, lang, theme 
+  zoom, setZoom, offset, setOffset, lang, theme, backgroundImage 
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDraggingMap, setIsDraggingMap] = useState(false);
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [containerSize, setContainerSize] = useState({ width: 5504, height: 3072 });
   const [simulatedPositions, setSimulatedPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [simulatedLinks, setSimulatedLinks] = useState<GraphLink[]>([]);
   const [liveDragPos, setLiveDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -108,39 +88,132 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
 
   // Seeded random for stable initial positions
   const getSeededPos = (id: string) => {
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-      hash = ((hash << 5) - hash) + id.charCodeAt(i);
-      hash |= 0;
+    const name = id.replace('person-', '');
+    
+    // Specific positions based on user screenshot
+    const specificPositions: Record<string, { x: number, y: number }> = {
+      // Left Group
+      'Iga Gabriela Strzeżek': { x: 20, y: 15 },
+      'Foundation Ub - Iga Gabriela Strzeżek': { x: 20, y: 15 },
+      'Dorota Tymińska': { x: 20, y: 25 },
+      'ABi - Dorota Tymińska / syn': { x: 20, y: 25 },
+      'Bogdan Sadowski': { x: 20, y: 35 },
+      'Foundation BoRedy - Bogdan Sadowski': { x: 20, y: 35 },
+      'Witold Sudomir': { x: 28, y: 25 },
+      'Julia Galicka': { x: 25, y: 48 },
+      'Patrycja Szewczyk': { x: 25, y: 58 },
+
+      // Middle Group
+      'Paweł Cyniak': { x: 35, y: 40 },
+      'Przemysław Ożóg-Orzegowski': { x: 35, y: 50 },
+      'Karol Grzywacz': { x: 35, y: 60 },
+      'Rafał Dębiński': { x: 35, y: 70 },
+      'Paweł Plenikowski': { x: 45, y: 50 },
+
+      // Center Right Group
+      'Duong Van Huong': { x: 53, y: 35 },
+      'Simon Church': { x: 53, y: 50 },
+
+      // Right Group (Global)
+      'Matthew Moore': { x: 63, y: 25 },
+      'Martin Saunders': { x: 63, y: 35 },
+      'Dennis Maassen': { x: 63, y: 45 },
+      'Jane Clifford': { x: 63, y: 55 },
+      'Desmond Church': { x: 63, y: 65 },
+      'Damien Barrett': { x: 63, y: 75 },
+      'George Sarantakos': { x: 63, y: 85 },
+
+      // Floating Right
+      'Shelley Barrett': { x: 73, y: 75 }
+    };
+
+    if (specificPositions[name]) {
+      return specificPositions[name];
     }
-    // Use sin/cos with the hash to get stable values between 10 and 90
-    const x = 10 + (Math.abs(Math.sin(hash)) * 80);
-    const y = 10 + (Math.abs(Math.cos(hash)) * 80);
-    return { x, y };
+
+    // Helper to find which entity a person belongs to and their index
+    const findEntityInfoForPerson = (personName: string) => {
+      // Sort keys to ensure deterministic order
+      const sortedKeys = Object.keys(entities).sort();
+      for (const key of sortedKeys) {
+        const entity = entities[key];
+        const index = entity.management.findIndex(p => p.name === personName);
+        if (index !== -1) {
+          return { id: entity.id, index, count: entity.management.length };
+        }
+      }
+      return null;
+    };
+
+    const entityInfo = id.startsWith('person-') ? findEntityInfoForPerson(name) : null;
+    const entityId = entityInfo ? entityInfo.id : id.replace('entity-', '');
+    
+    // Fixed positions based on the sketch, adjusted for people rows below
+    const fixedPositions: Record<string, { x: number, y: number }> = {
+      'blockchain': { x: 25, y: 7 },
+      'marketing': { x: 50, y: 7 },
+      'bamboo': { x: 75, y: 7 },
+      'global': { x: 50, y: 24 },
+      'nederland': { x: 15, y: 46 },
+      'europe': { x: 38, y: 46 },
+      'retail': { x: 62, y: 46 },
+      'usa': { x: 85, y: 46 },
+      'poland': { x: 50, y: 66 },
+      'gov_poland': { x: 50, y: 84 }
+    };
+
+    let baseX = 50;
+    let baseY = 50;
+
+    if (entityId && fixedPositions[entityId]) {
+      baseX = fixedPositions[entityId].x;
+      baseY = fixedPositions[entityId].y;
+    }
+
+    // For people, place in a row below the entity
+    if (entityInfo) {
+      const rowSpacing = 5; // Horizontal spacing %
+      const verticalOffset = 9; // Vertical offset % below entity
+      
+      // Center the row
+      const startX = baseX - ((entityInfo.count - 1) * rowSpacing) / 2;
+      const x = startX + (entityInfo.index * rowSpacing);
+      const y = baseY + verticalOffset;
+      
+      return { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) };
+    }
+
+    // Fallback for people not found in any entity (shouldn't happen)
+    return { x: baseX, y: baseY + 10 };
   };
 
   const [nodeOverrides, setNodeOverrides] = useState<Record<string, { x: number; y: number }>>(() => {
-    const saved = localStorage.getItem('igc-affiliation-node-overrides');
-    return saved ? JSON.parse(saved) : {};
+    try {
+      const saved = localStorage.getItem('igc-affiliation-node-overrides');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      console.error("Error loading affiliation node overrides:", e);
+      return {};
+    }
   });
 
+  const handleResetLayout = () => {
+    setNodeOverrides({});
+    try {
+      localStorage.removeItem('igc-affiliation-node-overrides');
+    } catch (e) {}
+  };
+
   useEffect(() => {
-    localStorage.setItem('igc-affiliation-node-overrides', JSON.stringify(nodeOverrides));
+    try {
+      localStorage.setItem('igc-affiliation-node-overrides', JSON.stringify(nodeOverrides));
+    } catch (e) {
+      console.error("Error saving affiliation node overrides:", e);
+    }
   }, [nodeOverrides]);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    const updateSize = () => {
-      if (containerRef.current) {
-        setContainerSize({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight
-        });
-      }
-    };
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    // Fixed size map, no resize listener needed
   }, []);
 
   useEffect(() => {
@@ -152,34 +225,9 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
     const graphLinks: GraphLink[] = [];
     const peopleMap = new Map<string, GraphNode>();
 
-      // Add Entity Nodes
+      // Iterate entities to find people
       (Object.values(entities) as ConsortiumEntity[]).forEach(entity => {
-        const nodeId = `entity-${entity.id}`;
-        const override = nodeOverrides[nodeId];
-        const seeded = getSeededPos(nodeId);
-        graphNodes.push({
-          id: nodeId,
-          type: 'entity',
-          name: lang === 'pl' ? entity.name : entity.nameEn || entity.name,
-          color: entity.color,
-          logo: entity.logo,
-          x: override ? override.x : seeded.x,
-          y: override ? override.y : seeded.y,
-          fx: override ? override.x : undefined,
-          fy: override ? override.y : undefined
-        });
-
-        // Add Hierarchy Links
-        if (entity.parent && entities[entity.parent]) {
-          graphLinks.push({
-            source: `entity-${entity.parent}`,
-            target: `entity-${entity.id}`,
-            type: 'hierarchy',
-            label: lang === 'pl' ? 'Struktura' : 'Structure'
-          });
-        }
-
-        // Add People Nodes and Referral Links
+        // Add People Nodes
         entity.management.forEach(person => {
           let personNode = peopleMap.get(person.name);
           if (!personNode) {
@@ -202,13 +250,6 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
             peopleMap.set(person.name, personNode);
             graphNodes.push(personNode);
           }
-
-          graphLinks.push({
-            source: `person-${person.name}`,
-            target: `entity-${entity.id}`,
-            type: 'affiliation',
-            label: person.role || (lang === 'pl' ? 'Zarząd' : 'Management')
-          });
 
           // Add Referral Links
           if (person.referredBy) {
@@ -265,13 +306,13 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
   const selectedNode = useMemo(() => {
     const targetId = activeLinesId || selectedId;
     if (!targetId) return null;
-    return nodes.find(n => n.id === `entity-${targetId}` || n.id === `person-${targetId}` || n.id === targetId);
+    return nodes.find(n => n.id === `person-${targetId}` || n.id === targetId);
   }, [nodes, activeLinesId, selectedId]);
 
   const neighbors = useMemo(() => {
     const targetId = activeLinesId || selectedId;
     if (!targetId) return new Set<string>();
-    const nodeId = nodes.find(n => n.id === `entity-${targetId}` || n.id === `person-${targetId}` || n.id === targetId)?.id;
+    const nodeId = nodes.find(n => n.id === `person-${targetId}` || n.id === targetId)?.id;
     if (!nodeId) return new Set<string>();
     
     const set = new Set<string>([nodeId]);
@@ -299,13 +340,13 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
     e.stopPropagation();
     
     if (isConnecting) {
+      // Connecting logic for people? Maybe referral links?
+      // For now, let's assume no custom connecting in this view for people unless requested.
+      // But we keep the props.
       if (!connectionSource) {
         setConnectionSource(id);
       } else if (connectionSource !== id) {
-        // Only allow entity-to-entity custom links for now to match MapView
-        if (connectionSource.startsWith('entity-') && id.startsWith('entity-')) {
-          onAddCustomLink(connectionSource.replace('entity-', ''), id.replace('entity-', ''));
-        }
+         // Logic for connecting people if needed
       } else {
         setConnectionSource(null);
       }
@@ -392,9 +433,23 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
       onWheel={handleWheel}
     >
       <div 
-        className={`w-full h-full relative origin-top-left ${(isDraggingMap || draggedNodeId) ? '' : 'transition-transform duration-200 ease-out'}`}
-        style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
+        className={`relative origin-top-left ${(isDraggingMap || draggedNodeId) ? '' : 'transition-transform duration-200 ease-out'}`}
+        style={{ 
+          transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+          width: 5504,
+          height: 3072
+        }}
       >
+        {backgroundImage && (
+          <div className="absolute inset-0 z-0 pointer-events-none">
+            <img 
+              src={backgroundImage} 
+              alt="Affiliation Background" 
+              className="w-full h-full object-cover" 
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        )}
         <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ width: '100%', height: '100%' }}>
           <defs>
             <marker
@@ -407,6 +462,16 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
             >
               <polygon points="0 0, 10 3.5, 0 7" fill={theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'} />
             </marker>
+            <marker
+              id="arrowhead-green"
+              markerWidth="10"
+              markerHeight="7"
+              refX="25"
+              refY="3.5"
+              orient="auto"
+            >
+              <polygon points="0 0, 10 3.5, 0 7" fill="#22c55e" />
+            </marker>
           </defs>
           {simulatedLinks.map((link, idx) => {
             const sourceId = typeof link.source === 'string' ? link.source : (link.source as GraphNode).id;
@@ -416,28 +481,21 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
             const from = nodePositions[sourceId];
             const to = nodePositions[targetId];
             
-            // Check if this is a custom link (entity to entity, but not hierarchy)
-            const isCustom = sourceId.startsWith('entity-') && targetId.startsWith('entity-') && link.type === 'affiliation';
             const targetIdForLines = activeLinesId || selectedId;
             const isHighlighted = targetIdForLines && (
-              sourceId === `entity-${targetIdForLines}` || 
               sourceId === `person-${targetIdForLines}` || 
-              targetId === `entity-${targetIdForLines}` || 
               targetId === `person-${targetIdForLines}`
             );
 
             return (
-              <g key={`line-${idx}`} className={`group/link transition-opacity duration-300 ${isHighlighted ? 'opacity-100' : 'opacity-0'}`}>
+              <g key={`line-${idx}`} className={`group/link transition-opacity duration-300 ${isHighlighted ? 'opacity-100' : 'opacity-30'}`}>
                 <line 
                   x1={`${from.x}%`} y1={`${from.y}%`}
                   x2={`${to.x}%`} y2={`${to.y}%`}
-                  stroke={isCustom 
-                    ? (theme === 'dark' ? 'rgba(168, 85, 247, 0.4)' : 'rgba(147, 51, 234, 0.5)')
-                    : theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)'
-                  }
-                  strokeWidth={isCustom ? "0.6" : "0.4"}
-                  strokeDasharray={isCustom ? "2, 2" : link.type === 'affiliation' ? "1, 2" : "none"}
-                  markerEnd="url(#arrowhead)"
+                  stroke={isHighlighted ? '#22c55e' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)')}
+                  strokeWidth={isHighlighted ? "0.6" : "0.4"}
+                  strokeDasharray="none"
+                  markerEnd={isHighlighted ? "url(#arrowhead-green)" : "url(#arrowhead)"}
                 />
                 {link.label && (
                   <g transform={`translate(${(from.x + to.x) / 2 * containerSize.width / 100}, ${(from.y + to.y) / 2 * containerSize.height / 100})`}>
@@ -462,40 +520,16 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
                     </text>
                   </g>
                 )}
-                {isCustom && (
-                  <circle
-                    cx={`${(from.x + to.x) / 2}%`}
-                    cy={`${(from.y + to.y) / 2}%`}
-                    r="0.8"
-                    fill={theme === 'dark' ? '#ef4444' : '#dc2626'}
-                    className="opacity-0 group-hover/link:opacity-100 cursor-pointer pointer-events-auto transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveCustomLink(sourceId.replace('entity-', ''), targetId.replace('entity-', ''));
-                    }}
-                  />
-                )}
               </g>
             );
           })}
-          {isConnecting && connectionSource && nodePositions[connectionSource] && (
-            <line
-              x1={`${nodePositions[connectionSource].x}%`}
-              y1={`${nodePositions[connectionSource].y}%`}
-              x2={`${mousePos.x}%`}
-              y2={`${mousePos.y}%`}
-              stroke={theme === 'dark' ? 'rgba(34, 211, 238, 0.5)' : 'rgba(8, 145, 178, 0.5)'}
-              strokeWidth="0.4"
-              strokeDasharray="2, 2"
-            />
-          )}
         </svg>
 
         {nodes.map((node) => {
           const pos = nodePositions[node.id];
           if (!pos) return null;
           const isConnectionSource = connectionSource === node.id;
-          const isSelected = selectedId === node.id || selectedId === node.id.replace('entity-', '') || selectedId === node.id.replace('person-', '');
+          const isSelected = selectedId === node.id || selectedId === node.id.replace('person-', '');
           const isHighlighted = (activeLinesId || selectedId) ? neighbors.has(node.id) : true;
           const isRelated = isShowingRelated && neighbors.has(node.id) && !isSelected;
           
@@ -510,58 +544,40 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 if (!isConnecting) {
-                  // If we moved significantly, it was a drag, not a click
                   if (hasMovedDuringDrag.current) return;
-                  
-                  const id = node.id.replace('entity-', '').replace('person-', '');
+                  const id = node.id.replace('person-', '');
                   setActiveLinesId(id === activeLinesId ? null : id);
                 }
               }}
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 if (!isConnecting) {
-                  const id = node.id.replace('entity-', '').replace('person-', '');
+                  const id = node.id.replace('person-', '');
                   onSelect(id);
                 }
               }}
             >
               <div className={`relative flex flex-col items-center transition-all duration-300 ${isConnectionSource ? 'ring-4 ring-purple-500 rounded-full animate-pulse p-2' : ''}`}>
-                {node.type === 'person' ? (
                   <div className="relative">
                     <div className={`absolute -inset-2 rounded-full blur-lg transition-opacity ${isSelected ? 'opacity-80' : 'opacity-40 group-hover:opacity-70'}`} style={{ backgroundColor: node.color }} />
                     {node.photo ? (
-                      <div className={`w-14 h-14 rounded-full overflow-hidden border-2 shadow-xl group-hover:scale-110 transition-transform duration-300 relative ${isSelected ? 'border-cyan-500 ring-4 ring-cyan-500/20' : 'border-white/40'}`}>
+                      <div className={`w-56 h-56 rounded-full overflow-hidden border-2 shadow-xl group-hover:scale-110 transition-transform duration-300 relative ${isSelected ? 'border-cyan-500 ring-4 ring-cyan-500/20' : 'border-white/40'}`}>
                         <img src={node.photo} alt={node.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                          <Zap size={14} className="text-white animate-pulse" />
+                          <Zap size={56} className="text-white animate-pulse" />
                         </div>
                       </div>
                     ) : (
-                      <div className={`w-14 h-14 rounded-full flex items-center justify-center border-2 shadow-xl group-hover:scale-110 transition-transform duration-300 relative ${isSelected ? 'border-cyan-500 ring-4 ring-cyan-500/20' : 'border-white/40'} ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                        <User size={20} className={theme === 'dark' ? 'text-slate-600' : 'text-slate-400'} />
+                      <div className={`w-56 h-56 rounded-full flex items-center justify-center border-2 shadow-xl group-hover:scale-110 transition-transform duration-300 relative ${isSelected ? 'border-cyan-500 ring-4 ring-cyan-500/20' : 'border-white/40'} ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                        <User size={80} className={theme === 'dark' ? 'text-slate-600' : 'text-slate-400'} />
                         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-full">
-                          <Zap size={14} className="text-white animate-pulse" />
+                          <Zap size={56} className="text-white animate-pulse" />
                         </div>
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="relative">
-                    <div className={`absolute -inset-4 rounded-full blur-xl transition-opacity ${isSelected ? 'opacity-90' : 'opacity-50 group-hover:opacity-80'}`} style={{ backgroundColor: node.color }} />
-                    <div 
-                      className={`w-12 h-12 rounded-2xl flex items-center justify-center border-2 shadow-2xl group-hover:scale-110 transition-transform duration-300 relative overflow-hidden ${isSelected ? 'ring-4 ring-cyan-500/20' : ''} ${theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}
-                      style={{ borderColor: isSelected ? '#22d3ee' : node.color }}
-                    >
-                      {node.logo ? (
-                        <img src={node.logo} alt={node.name} className="w-full h-full object-contain p-1" referrerPolicy="no-referrer" />
-                      ) : (
-                        <Building2 size={20} style={{ color: isSelected ? '#22d3ee' : node.color }} />
-                      )}
-                    </div>
-                  </div>
-                )}
                 
-                <div className={`mt-3 px-3 py-1 rounded-full text-[8px] font-bold whitespace-nowrap shadow-lg transition-all ${
+                <div className={`mt-8 px-8 py-3 rounded-full text-[32px] font-bold whitespace-nowrap shadow-lg transition-all ${
                   isSelected 
                     ? 'bg-cyan-500 text-white border-cyan-400 opacity-100 translate-y-0' 
                     : theme === 'dark' 
@@ -586,7 +602,7 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full animate-pulse`} style={{ backgroundColor: selectedNode.color }} />
               <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                {selectedNode.type === 'person' ? (lang === 'pl' ? 'Profil Osoby' : 'Person Profile') : (lang === 'pl' ? 'Karta Podmiotu' : 'Entity Card')}
+                {lang === 'pl' ? 'Profil Osoby' : 'Person Profile'}
               </span>
             </div>
             <button 
@@ -604,17 +620,12 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
               </h4>
               <div className={`flex items-center gap-2 mb-3 flex-wrap`}>
                 <div className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${theme === 'dark' ? 'bg-cyan-500/10 text-cyan-400' : 'bg-cyan-50 text-cyan-600'}`}>
-                  {selectedNode.role || (selectedNode.type === 'entity' ? (lang === 'pl' ? 'Podmiot' : 'Entity') : '')}
+                  {selectedNode.role}
                 </div>
                 {selectedNode.personData?.isPartner && (
                   <div className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1`}>
                     <Zap size={10} />
                     {lang === 'pl' ? 'Partner' : 'Partner'}
-                  </div>
-                )}
-                {selectedNode.type === 'entity' && (
-                  <div className={`text-[9px] font-bold text-slate-500`}>
-                    KRS: 0000{Math.floor(Math.random() * 900000 + 100000)}
                   </div>
                 )}
               </div>
@@ -627,16 +638,12 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
                 </div>
               )}
 
-              {(lang === 'pl' ? selectedNode.personData?.aboutMe : selectedNode.personData?.aboutMeEn || selectedNode.personData?.aboutMe) ? (
+              {(lang === 'pl' ? selectedNode.personData?.aboutMe : selectedNode.personData?.aboutMeEn || selectedNode.personData?.aboutMe) && (
                 <div className={`relative`}>
                   <p className={`text-[12px] leading-relaxed italic ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
                     "{lang === 'pl' ? selectedNode.personData?.aboutMe : selectedNode.personData?.aboutMeEn || selectedNode.personData?.aboutMe}"
                   </p>
                 </div>
-              ) : selectedNode.type === 'entity' && (
-                <p className={`text-[12px] leading-relaxed ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
-                  {lang === 'pl' ? entities[selectedNode.id.replace('entity-', '')]?.description : entities[selectedNode.id.replace('entity-', '')]?.descriptionEn || entities[selectedNode.id.replace('entity-', '')]?.description}
-                </p>
               )}
               {selectedNode.personData?.website && (
                 <a 
@@ -651,7 +658,7 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
                 </a>
               )}
               
-              {selectedNode.type === 'person' && selectedNode.personData?.email && (
+              {selectedNode.personData?.email && (
                 <a 
                   href={`mailto:${selectedNode.personData.email}`}
                   className={`mt-2 flex items-center gap-2 text-[10px] font-bold transition-colors ${theme === 'dark' ? 'text-cyan-400 hover:text-cyan-300' : 'text-cyan-600 hover:text-cyan-700'}`}
@@ -660,27 +667,36 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
                   {selectedNode.personData.email}
                 </a>
               )}
-
-              {selectedNode.type === 'entity' && entities[selectedNode.id.replace('entity-', '')]?.email && (
-                <a 
-                  href={`mailto:${entities[selectedNode.id.replace('entity-', '')].email}`}
-                  className={`mt-3 flex items-center gap-2 text-[10px] font-bold transition-colors ${theme === 'dark' ? 'text-cyan-400 hover:text-cyan-300' : 'text-cyan-600 hover:text-cyan-700'}`}
-                >
-                  <Mail size={12} />
-                  {entities[selectedNode.id.replace('entity-', '')].email}
-                </a>
-              )}
             </div>
           </div>
           <div className={`px-5 py-3 border-t flex items-center justify-between ${theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
              <div className="flex gap-4">
                 <div className="flex flex-col">
-                  <span className="text-[8px] uppercase text-slate-500 font-bold tracking-widest">Powiązania</span>
+                  <span className="text-[8px] uppercase text-slate-500 font-bold tracking-widest">
+                    {lang === 'pl' ? 'Powiązania' : 'Links'}
+                  </span>
                   <span className={`text-xs font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{neighbors.size - 1}</span>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[8px] uppercase text-slate-500 font-bold tracking-widest">Status</span>
-                  <span className="text-xs font-bold text-emerald-500">Aktywny</span>
+                  <div className="flex flex-col">
+                    <span className={`text-xs font-bold ${selectedNode.personData?.status === 'inactive' ? 'text-red-500' : 'text-emerald-500'}`}>
+                      {selectedNode.personData?.status === 'inactive' 
+                        ? (lang === 'pl' ? 'Nieaktywny' : 'Inactive') 
+                        : (lang === 'pl' ? 'Aktywny' : 'Active')}
+                    </span>
+                    {selectedNode.personData?.tierLevel && (
+                      <span className={`text-[10px] font-bold mt-0.5 ${
+                        selectedNode.personData.tierLevel === 'Tier 1' ? 'text-yellow-500' :
+                        selectedNode.personData.tierLevel === 'Tier 2' ? 'text-blue-500' :
+                        selectedNode.personData.tierLevel === 'Tier 3' ? 'text-purple-500' :
+                        selectedNode.personData.tierLevel === 'Tier 4' ? 'text-pink-500' :
+                        'text-slate-400' // Tier 5 / Silver
+                      }`}>
+                        {selectedNode.personData.tierLevel}
+                      </span>
+                    )}
+                  </div>
                 </div>
              </div>
              <div className="flex gap-2">
@@ -700,11 +716,8 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (selectedNode.type === 'person' && selectedNode.personData) {
+                    if (selectedNode.personData) {
                       onEditPerson?.(selectedNode.personData);
-                    } else {
-                      const id = selectedNode.id.replace('entity-', '');
-                      onEditEntity?.(id);
                     }
                   }}
                   className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg active:scale-95 ${theme === 'dark' ? 'bg-cyan-500 text-slate-900 hover:bg-cyan-400 shadow-cyan-500/20' : 'bg-cyan-600 text-white hover:bg-cyan-500 shadow-cyan-600/20'}`}
@@ -719,15 +732,15 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
 
       <div className="absolute bottom-6 right-6 flex flex-col gap-3">
         <button
-          onClick={() => onAddEntity?.('global')}
+          onClick={handleResetLayout}
           className={`px-4 py-2.5 rounded-xl border backdrop-blur-md shadow-lg text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2 ${
             theme === 'dark' 
-              ? 'bg-cyan-500 text-slate-900 border-cyan-400 hover:bg-cyan-400' 
-              : 'bg-cyan-600 text-white border-cyan-500 hover:bg-cyan-500'
+              ? 'bg-slate-900/80 border-slate-700 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50' 
+              : 'bg-white/80 border-slate-200 text-slate-500 hover:text-cyan-600 hover:border-cyan-500/50'
           }`}
         >
-          <Building2 size={14} />
-          {lang === 'pl' ? 'Dodaj Podmiot' : 'Add Entity'}
+          <Zap size={14} />
+          {lang === 'pl' ? 'Resetuj Układ' : 'Reset Layout'}
         </button>
         <button
           onClick={() => onAddPerson?.()}
@@ -741,21 +754,6 @@ const AffiliationView: React.FC<AffiliationViewProps> = ({
           {lang === 'pl' ? 'Dodaj Osobę' : 'Add Person'}
         </button>
       </div>
-
-      <div className={`absolute bottom-6 left-6 p-4 backdrop-blur border rounded-xl text-[10px] font-medium max-w-xs pointer-events-none transition-colors ${theme === 'dark' ? 'bg-slate-900/80 border-slate-800 text-slate-500' : 'bg-white/80 border-slate-200 text-slate-600'}`}>
-        <div className="flex items-center gap-2 mb-2 text-cyan-400 font-bold uppercase tracking-wider">
-          <Zap size={12} />
-          {lang === 'pl' ? 'Mapa Relacji' : 'Relationship Map'}
-        </div>
-        <p>{lang === 'pl' ? 'Widok swobodny relacji. Kliknij osobę lub podmiot, aby zobaczyć połączenia. Przeciągnij, aby przesuwać węzły.' : 'Free relationship view. Click a person or entity to see connections. Drag to move nodes.'}</p>
-      </div>
-
-      <style>{`
-        .bg-dot-pattern {
-          background-image: radial-gradient(${theme === 'dark' ? '#1e293b' : '#cbd5e1'} 1px, transparent 1px);
-          background-size: 24px 24px;
-        }
-      `}</style>
     </div>
   );
 };

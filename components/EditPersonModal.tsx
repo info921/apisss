@@ -49,7 +49,7 @@ const EditPersonModal: React.FC<EditPersonModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
-      <div className={`w-full max-w-md rounded-3xl border shadow-2xl overflow-hidden relative ${
+      <div className={`w-full max-w-xs rounded-3xl border shadow-2xl overflow-hidden relative ${
         theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
       }`}>
         {showDeleteConfirm && (
@@ -193,7 +193,43 @@ const EditPersonModal: React.FC<EditPersonModalProps> = ({
               </select>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+                  {lang === 'pl' ? 'Poziom (Tier)' : 'Tier Level'}
+                </label>
+                <select
+                  value={formData.tierLevel || 'Tier 1'}
+                  onChange={e => setFormData({ ...formData, tierLevel: e.target.value as any })}
+                  className={`w-full px-4 py-2 rounded-xl border-2 outline-none transition-all ${
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 focus:border-cyan-500/50' : 'bg-slate-50 border-slate-200 focus:border-cyan-500/50'
+                  }`}
+                >
+                  <option value="Tier 1">Tier 1 (Gold)</option>
+                  <option value="Tier 2">Tier 2 (Blue)</option>
+                  <option value="Tier 3">Tier 3 (Purple)</option>
+                  <option value="Tier 4">Tier 4 (Pink)</option>
+                  <option value="Tier 5">Tier 5 (Silver)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+                  Status
+                </label>
+                <select
+                  value={formData.status || 'active'}
+                  onChange={e => setFormData({ ...formData, status: e.target.value as any })}
+                  className={`w-full px-4 py-2 rounded-xl border-2 outline-none transition-all ${
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 focus:border-cyan-500/50' : 'bg-slate-50 border-slate-200 focus:border-cyan-500/50'
+                  }`}
+                >
+                  <option value="active">{lang === 'pl' ? 'Aktywny' : 'Active'}</option>
+                  <option value="inactive">{lang === 'pl' ? 'Nieaktywny' : 'Inactive'}</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
                   {lang === 'pl' ? 'O mnie (PL)' : 'About Me (PL)'}
